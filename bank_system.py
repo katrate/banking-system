@@ -71,7 +71,8 @@ def next_id(cursor, table, id_col, prefix, width=4):
     cursor.execute("SELECT " + id_col + " FROM " + table + " WHERE " + id_col + " LIKE %s",
                    (prefix + "-%",))
     max_num = 0
-    for (val,) in cursor.fetchall():
+    for row in cursor.fetchall():
+        val = row[id_col] if isinstance(row, dict) else row[0]
         try:
             max_num = max(max_num, int(val.split("-")[1]))
         except (IndexError, ValueError, TypeError):
