@@ -80,37 +80,37 @@ def next_id(cursor, table, id_col, prefix, width=4):
 
 def get_text(prompt, required=True):
     while True:
-        val = input(prompt).strip()
+        val = input(center_prompt(prompt)).strip()
         if not required:
             return val or None
         if val:
             return val
-        print("  This field cannot be empty.")
+        say("This field cannot be empty.")
 
 def get_int(prompt):
     while True:
         try:
-            return int(input(prompt).strip())
+            return int(input(center_prompt(prompt)).strip())
         except ValueError:
-            print("  Please enter a whole number.")
+            say("Please enter a whole number.")
 
 def get_float(prompt):
     while True:
         try:
-            return float(input(prompt).strip())
+            return float(input(center_prompt(prompt)).strip())
         except ValueError:
-            print("  Please enter a number.")
+            say("Please enter a number.")
 
 def get_amount(prompt):
     while True:
         try:
-            val = float(input(prompt).strip())
+            val = float(input(center_prompt(prompt)).strip())
             if val <= 0:
-                print("  Amount must be greater than zero.")
+                say("Amount must be greater than zero.")
                 continue
             return round(val, 2)
         except ValueError:
-            print("  Please enter a valid number.")
+            say("Please enter a valid number.")
 
 def hash_pw(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
@@ -155,43 +155,87 @@ def _record(cursor, account_number, tx_type, amount, new_balance,
 #endregion
 
 #region Animations
+def clear():
+    os.system("cls" if os.name == "nt" else "clear")
+
+def term_width():
+    try:
+        return os.get_terminal_size().columns
+    except OSError:
+        return 80
+
+def center(text):
+    return text.center(term_width())
+
+def center_prompt(text):
+    pad = max(0, (term_width() - len(text)) // 2)
+    return " " * pad + text
+
+def header():
+    print()
+    print(center("=" * 52))
+    print(center("B A N K I N G   M A N A G E M E N T"))
+    print(center("S Y S T E M   v 1 . 0"))
+    print(center("=" * 52))
+    print()
+
+def say(text):
+    print(center(text))
+
+def say_block(lines):
+    if not lines:
+        return
+    longest = max(len(l) for l in lines)
+    pad = max(0, (term_width() - longest) // 2)
+    for l in lines:
+        print(" " * pad + l)
+
 def type_print(text, delay=0.03):
-    for ch in text:
+    for ch in center(text):
         print(ch, end="", flush=True)
+        time.sleep(delay)
+    print()
+
+def ring_loader(label="", rounds=3, delay=0.13):
+    frames = ["◝", "◞", "◟", "◜"]
+    for i in range(rounds * len(frames)):
+        frame = frames[i % len(frames)]
+        text = frame if not label else frame + "  " + label
+        print("\r" + center(text), end="", flush=True)
         time.sleep(delay)
     print()
 
 def loading(label, n=3, delay=0.25):
     for i in range(n + 1):
-        print("\r  " + label + " " + "." * i, end="", flush=True)
+        print("\r" + center(label + " " + "." * i), end="", flush=True)
         time.sleep(delay)
-    print(" OK")
+    print("\r" + center(label + " OK"))
 
 def spinner(label, rounds=2, delay=0.1):
     frames = "|/-\\"
     for i in range(rounds * 4):
-        print("\r  " + label + " " + frames[i % 4], end="", flush=True)
+        print("\r" + center(label + " " + frames[i % 4]), end="", flush=True)
         time.sleep(delay)
-    print("\r  " + label + " Done!      ")
+    print("\r" + center(label + " Done!"))
 
 def progress(label, steps=20, delay=0.04):
     for i in range(steps + 1):
         bar = "#" * i + "-" * (steps - i)
         pct = int(i * 100 / steps)
-        print("\r  " + label + " [" + bar + "] " + str(pct) + "%", end="", flush=True)
+        print("\r" + center(label + " [" + bar + "] " + str(pct) + "%"), end="", flush=True)
         time.sleep(delay)
     print()
 
 def boot():
-    print()
-    print("=" * 52)
-    print("        B A N K I N G   M A N A G E M E N T")
-    print("              S Y S T E M   v 1 . 0")
-    print("=" * 52)
-    progress("Initialising   ", 20, 0.035)
+    clear()
+    header()
+    ring_loader("", rounds=2, delay=0.14)
+    clear()
+    progress("Initialising", 18, 0.03)
     loading("Loading modules", 3, 0.22)
-    spinner("Connecting to database", 2, 0.08)
+    spinner("Connecting to database", 2, 0.09)
     loading("Preparing menu", 2, 0.22)
+    print()
 #endregion
 
 #region Admin Login
@@ -204,14 +248,16 @@ def ensure_admin():
                   "VALUES (%s,%s,%s,%s)",
                   (aid, "admin", hash_pw("admin123"), "System Administrator"))
         conn.commit()
-        print("  Default admin created  ->  username: admin   password: admin123")
+        say("Default admin created  ->  username: admin   password: admin123")
     c.close()
 
 def admin_login():
-    print("\n===== ADMIN LOGIN =====")
+    clear()
+    header()
+    print(center("===== ADMIN LOGIN ====="))
     for _ in range(3):
         user = get_text("Username: ")
-        pw = getpass.getpass("Password: ").strip()
+        pw = getpass.getpass(center_prompt("Password: ")).strip()
         spinner("Verifying credentials", 2, 0.1)
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT password_hash, full_name FROM admins WHERE username=%s", (user,))
@@ -219,30 +265,32 @@ def admin_login():
         cursor.close()
         if row and row["password_hash"] == hash_pw(pw):
             type_print("Access granted. Welcome, " + (row["full_name"] or user) + "!", 0.03)
-            time.sleep(0.4)
+            time.sleep(0.6)
+            clear()
+            header()
             return True
-        type_print("  Access denied. Try again.", 0.02)
+        type_print("Access denied. Try again.", 0.02)
     type_print("Too many failed attempts. Exiting.", 0.02)
     return False
 
 def add_admin():
-    print("\n--- Add New Admin ---")
+    print("\n" + center("--- Add New Admin ---"))
     username = get_text("New admin username: ")
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM admins WHERE username=%s", (username,))
     if c.fetchone()[0] > 0:
-        print("  Username '" + username + "' already exists.")
+        say("Username '" + username + "' already exists.")
         c.close()
         return
     full_name = get_text("Full name (optional): ", required=False)
-    pw = getpass.getpass("Password for new admin: ").strip()
+    pw = getpass.getpass(center_prompt("Password for new admin: ")).strip()
     if not pw:
-        print("  Password cannot be empty.")
+        say("Password cannot be empty.")
         c.close()
         return
-    pw2 = getpass.getpass("Confirm password: ").strip()
+    pw2 = getpass.getpass(center_prompt("Confirm password: ")).strip()
     if pw != pw2:
-        print("  Passwords do not match.")
+        say("Passwords do not match.")
         c.close()
         return
     aid = next_id(c, "admins", "admin_ID", "ADM")
@@ -251,22 +299,22 @@ def add_admin():
                   "VALUES (%s,%s,%s,%s)",
                   (aid, username, hash_pw(pw), full_name))
         conn.commit()
-        print("  Admin created : " + aid + "  (username: " + username + ")")
+        say("Admin created : " + aid + "  (username: " + username + ")")
     except mysql.connector.Error as e:
         conn.rollback()
-        print("  Error creating admin: " + str(e))
+        say("Error creating admin: " + str(e))
     finally:
         c.close()
 #endregion
 
 #region Features
 def add_customer():
-    print("\n--- Add New Customer ---")
+    print("\n" + center("--- Add New Customer ---"))
     name = get_text("Customer name: ")
     email = get_text("Email (optional): ", required=False)
     phone = get_text("Phone (optional): ", required=False)
     address = get_text("Address (optional): ", required=False)
-    print("  Account type:  1) SAVINGS   2) CURRENT   3) FIXED")
+    say("Account type:  1) SAVINGS   2) CURRENT   3) FIXED")
     acct_type = {"1": "SAVINGS", "2": "CURRENT", "3": "FIXED"}.get(
         get_int("Choose (1-3): "), "SAVINGS")
 
@@ -283,11 +331,11 @@ def add_customer():
             "VALUES (%s,%s,%s,0.00)",
             (acct_no, cust_id, acct_type))
         conn.commit()
-        print("  Customer created : " + cust_id)
-        print("  Account opened   : " + acct_no + "  (" + acct_type + ", balance 0.00)")
+        say("Customer created : " + cust_id)
+        say("Account opened   : " + acct_no + "  (" + acct_type + ", balance 0.00)")
     except mysql.connector.Error as e:
         conn.rollback()
-        print("  Error adding customer: " + str(e))
+        say("Error adding customer: " + str(e))
     finally:
         cursor.close()
 
@@ -381,19 +429,18 @@ def _save_report(acct, lines):
     return filename
 
 def find_customer():
-    print("\n--- Find Customer by Account ---")
+    print("\n" + center("--- Find Customer by Account ---"))
     acct = get_text("Account number: ")
     lines = _customer_report(acct)
     if lines is None:
-        print("  No account found with number " + acct + ".")
+        say("No account found with number " + acct + ".")
         return
-    for ln in lines:
-        print(ln)
-    print("  Saved to " + _save_report(acct, lines))
+    say_block(lines)
+    say("Saved to " + _save_report(acct, lines))
 
 def transaction():
-    print("\n--- New Transaction ---")
-    print("  1) Deposit    2) Withdrawal    3) Transfer")
+    print("\n" + center("--- New Transaction ---"))
+    say("1) Deposit    2) Withdrawal    3) Transfer")
     choice = get_int("Choose (1-3): ")
     cursor = conn.cursor(dictionary=True)
 
@@ -402,19 +449,19 @@ def transaction():
             src = get_text("Sender account number: ")
             src_info = _account_info(cursor, src)
             if not src_info:
-                print("  Sender account not found."); return
+                say("Sender account not found."); return
             if src_info["status"] != "ACTIVE":
-                print("  Sender account is not active."); return
+                say("Sender account is not active."); return
             dst = get_text("Receiver account number: ")
             dst_info = _account_info(cursor, dst)
             if not dst_info:
-                print("  Receiver account not found."); return
+                say("Receiver account not found."); return
             if src == dst:
-                print("  Cannot transfer to the same account."); return
+                say("Cannot transfer to the same account."); return
             amount = get_amount("Amount to transfer: ")
             src_bal = float(src_info["balance"])
             if amount > src_bal:
-                print("  Insufficient balance."); return
+                say("Insufficient balance."); return
             dst_bal = float(dst_info["balance"])
 
             _record(cursor, src, "TRANSFER_OUT", amount, round(src_bal - amount, 2),
@@ -424,22 +471,22 @@ def transaction():
                     sender_id=src, sender_name=src_info["name"],
                     receiver_id=dst, receiver_name=dst_info["name"])
             conn.commit()
-            print("  Transferred " + str(round(amount, 2)) + ": " + src + " -> " + dst)
+            say("Transferred " + str(round(amount, 2)) + ": " + src + " -> " + dst)
             return
 
         if choice not in (1, 2):
-            print("  Invalid choice."); return
+            say("Invalid choice."); return
 
         acct = get_text("Account number: ")
         info = _account_info(cursor, acct)
         if not info:
-            print("  Account not found."); return
+            say("Account not found."); return
         if info["status"] != "ACTIVE":
-            print("  Account is not active."); return
+            say("Account is not active."); return
         amount = get_amount("Amount: ")
         bal = float(info["balance"])
         if choice == 2 and amount > bal:
-            print("  Insufficient balance."); return
+            say("Insufficient balance."); return
 
         tx_type = "DEPOSIT" if choice == 1 else "WITHDRAWAL"
         if choice == 1:
@@ -448,25 +495,25 @@ def transaction():
             new_balance = round(bal - amount, 2)
         _record(cursor, acct, tx_type, amount, new_balance)
         conn.commit()
-        print("  " + tx_type.title() + " of " + str(round(amount, 2)) +
-              " OK. New balance: " + str(round(new_balance, 2)))
+        say(tx_type.title() + " of " + str(round(amount, 2)) +
+            " OK. New balance: " + str(round(new_balance, 2)))
 
     except mysql.connector.Error as e:
         conn.rollback()
-        print("  Transaction failed: " + str(e))
+        say("Transaction failed: " + str(e))
     finally:
         cursor.close()
 
 def loan():
-    print("\n--- Apply for Loan ---")
+    print("\n" + center("--- Apply for Loan ---"))
     cursor = conn.cursor(dictionary=True)
     cust = get_text("Customer ID: ")
     cursor.execute("SELECT name FROM customers WHERE customer_ID=%s", (cust,))
     row = cursor.fetchone()
     if not row:
-        print("  Customer not found."); cursor.close(); return
-    print("  Applicant: " + row["name"])
-    print("  Loan type:  1) PERSONAL   2) HOME   3) CAR   4) EDUCATION")
+        say("Customer not found."); cursor.close(); return
+    say("Applicant: " + row["name"])
+    say("Loan type:  1) PERSONAL   2) HOME   3) CAR   4) EDUCATION")
     ltype = {"1": "PERSONAL", "2": "HOME", "3": "CAR", "4": "EDUCATION"}.get(
         get_int("Choose (1-4): "), "PERSONAL")
     purpose = get_text("Purpose (optional): ", required=False)
@@ -474,7 +521,7 @@ def loan():
     rate = get_float("Annual interest rate (%): ")
     tenure = get_int("Tenure (months): ")
     if tenure <= 0:
-        print("  Tenure must be positive."); cursor.close(); return
+        say("Tenure must be positive."); cursor.close(); return
 
     emi = calc_emi(amount, rate, tenure)
     total = round(emi * tenure, 2)
@@ -488,16 +535,16 @@ def loan():
             "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'PENDING',%s)",
             (loan_id, cust, ltype, purpose, amount, rate, tenure, emi, total, due))
         conn.commit()
-        print("  Loan " + loan_id + " created (PENDING).")
-        print("  EMI = " + str(round(emi, 2)) + " x " + str(tenure) +
-              " months | Total payable = " + str(round(total, 2)))
+        say("Loan " + loan_id + " created (PENDING).")
+        say("EMI = " + str(round(emi, 2)) + " x " + str(tenure) +
+            " months | Total payable = " + str(round(total, 2)))
     except mysql.connector.Error as e:
-        conn.rollback(); print("  Could not create loan: " + str(e))
+        conn.rollback(); say("Could not create loan: " + str(e))
     finally:
         cursor.close()
 
 def loan_payment():
-    print("\n--- Pay Loan EMI ---")
+    print("\n" + center("--- Pay Loan EMI ---"))
     cursor = conn.cursor(dictionary=True)
     loan_id = get_text("Loan ID: ")
     cursor.execute(
@@ -505,9 +552,9 @@ def loan_payment():
         "status, next_due_date FROM loans WHERE loan_ID=%s", (loan_id,))
     ln = cursor.fetchone()
     if not ln:
-        print("  Loan not found."); cursor.close(); return
+        say("Loan not found."); cursor.close(); return
     if ln["status"] == "PAID":
-        print("  Loan already fully paid."); cursor.close(); return
+        say("Loan already fully paid."); cursor.close(); return
 
     emi = float(ln["emi"])
     tenure = int(ln["tenure_months"])
@@ -516,14 +563,14 @@ def loan_payment():
     remaining = float(ln["remaining"])
     due = ln["next_due_date"]
 
-    print("  Remaining before: " + str(round(remaining, 2)))
+    say("Remaining before: " + str(round(remaining, 2)))
     amount = get_amount("Amount to pay: ")
     today = date.today()
 
     extra = 0.0
     if due and due < today:
         extra = 200.0
-        print("  Late payment (due " + str(due) + "). Penalty " + str(round(extra, 2)) + " applied.")
+        say("Late payment (due " + str(due) + "). Penalty " + str(round(extra, 2)) + " applied.")
 
     new_paid = round(paid + amount, 2)
     new_penalty = round(penalty + extra, 2)
@@ -546,40 +593,44 @@ def loan_payment():
             "last_payment_date=%s, next_due_date=%s WHERE loan_ID=%s",
             (new_paid, new_penalty, new_remaining, new_status, today, new_next, loan_id))
         conn.commit()
-        print("  Payment recorded. Remaining: " + str(round(new_remaining, 2)) +
-              " | Status: " + new_status)
+        say("Payment recorded. Remaining: " + str(round(new_remaining, 2)) +
+            " | Status: " + new_status)
     except mysql.connector.Error as e:
-        conn.rollback(); print("  Payment failed: " + str(e))
+        conn.rollback(); say("Payment failed: " + str(e))
     finally:
         cursor.close()
 
 def view_account():
-    print("\n--- Account Mini Statement ---")
+    print("\n" + center("--- Account Mini Statement ---"))
     acct = get_text("Account number: ")
     cursor = conn.cursor(dictionary=True)
     info = _account_info(cursor, acct)
     if not info:
-        print("  Account not found."); cursor.close(); return
-    print("  Holder : " + info["name"])
-    print("  Type   : " + info["account_type"] + "   Status: " + info["status"])
-    print("  Balance: " + str(round(float(info["balance"]), 2)))
+        say("Account not found."); cursor.close(); return
+    say_block([
+        "  Holder : " + info["name"],
+        "  Type   : " + info["account_type"] + "   Status: " + info["status"],
+        "  Balance: " + str(round(float(info["balance"]), 2)),
+    ])
     cursor.execute(
         "SELECT transaction_ID, type, amount, balance_after, timestamp "
         "FROM transactions WHERE account_ID=%s ORDER BY timestamp DESC LIMIT 10", (acct,))
     rows = cursor.fetchall()
     if not rows:
-        print("  No transactions yet.")
+        say("No transactions yet.")
     else:
-        print("  Last transactions:")
+        say("Last transactions:")
+        txns = []
         for r in rows:
             ts = str(r["timestamp"])
-            print("    " + ts + "  " + r["type"] + "  " +
-                  str(round(float(r["amount"]), 2)) + "  bal " +
-                  str(round(float(r["balance_after"]), 2)))
+            txns.append("    " + ts + "  " + r["type"] + "  " +
+                        str(round(float(r["amount"]), 2)) + "  bal " +
+                        str(round(float(r["balance_after"]), 2)))
+        say_block(txns)
     cursor.close()
 
 def view_loan():
-    print("\n--- Loan Status ---")
+    print("\n" + center("--- Loan Status ---"))
     loan_id = get_text("Loan ID: ")
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
@@ -587,28 +638,32 @@ def view_loan():
         "JOIN customers c ON l.customer_ID = c.customer_ID WHERE l.loan_ID=%s", (loan_id,))
     r = cursor.fetchone()
     if not r:
-        print("  Loan not found."); cursor.close(); return
-    print("  Loan    : " + r["loan_ID"] + "   Applicant: " + r["name"])
-    print("  Type    : " + r["loan_type"] + "   Purpose: " + (r["purpose"] or "-"))
-    print("  Amount  : " + str(round(float(r["amount"]), 2)) + " @ " +
-          str(r["interest_rate"]) + "% for " + str(r["tenure_months"]) + " months")
-    print("  EMI     : " + str(round(float(r["emi"]), 2)))
-    print("  Paid    : " + str(round(float(r["amount_paid"]), 2)) +
-          "   Penalty: " + str(round(float(r["penalty"]), 2)))
-    print("  Remaining: " + str(round(float(r["remaining"]), 2)) +
-          "   Status: " + r["status"])
-    print("  Last payment: " + str(r["last_payment_date"] or "never") +
-          "   Next due: " + str(r["next_due_date"] or "-"))
+        say("Loan not found."); cursor.close(); return
+    say_block([
+        "  Loan    : " + r["loan_ID"] + "   Applicant: " + r["name"],
+        "  Type    : " + r["loan_type"] + "   Purpose: " + (r["purpose"] or "-"),
+        "  Amount  : " + str(round(float(r["amount"]), 2)) + " @ " +
+            str(r["interest_rate"]) + "% for " + str(r["tenure_months"]) + " months",
+        "  EMI     : " + str(round(float(r["emi"]), 2)),
+        "  Paid    : " + str(round(float(r["amount_paid"]), 2)) +
+            "   Penalty: " + str(round(float(r["penalty"]), 2)),
+        "  Remaining: " + str(round(float(r["remaining"]), 2)) +
+            "   Status: " + r["status"],
+        "  Last payment: " + str(r["last_payment_date"] or "never") +
+            "   Next due: " + str(r["next_due_date"] or "-"),
+    ])
     cursor.close()
 #endregion
 
 #region Main Menu
 def run_submenu(title, items):
+    clear()
+    header()
     while True:
-        print("\n--- " + title + " ---")
+        print("\n" + center("--- " + title + " ---"))
         for i in range(len(items)):
-            print("  " + str(i + 1) + ") " + items[i][0])
-        print("  0) Back")
+            print(center("  " + str(i + 1) + ") " + items[i][0]))
+        print(center("  0) Back"))
         try:
             choice = get_int("Choose an option: ")
         except (KeyboardInterrupt, EOFError):
@@ -619,10 +674,10 @@ def run_submenu(title, items):
             try:
                 items[choice - 1][1]()
             except mysql.connector.Error as e:
-                print("  Database error: " + str(e))
+                say("Database error: " + str(e))
             except (KeyboardInterrupt, EOFError):
-                print("\n  (cancelled)")
+                say("(cancelled)")
         else:
-            print("  Invalid choice.")
+            say("Invalid choice.")
 
 #endregion

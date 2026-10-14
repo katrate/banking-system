@@ -26,12 +26,14 @@ admin_menu = [
 ]
 
 while True:
-    print("\n===== BANKING SYSTEM =====")
-    print("  1) Customer Management")
-    print("  2) Accounts & Transactions")
-    print("  3) Loan Management")
-    print("  4) Admin Management")
-    print("  0) Exit")
+    bank.clear()
+    bank.header()
+    print(bank.center("===== BANKING SYSTEM ====="))
+    print(bank.center("  1) Customer Management"))
+    print(bank.center("  2) Accounts & Transactions"))
+    print(bank.center("  3) Loan Management"))
+    print(bank.center("  4) Admin Management"))
+    print(bank.center("  0) Exit"))
     try:
         choice = bank.get_int("Choose an option: ")
     except (KeyboardInterrupt, EOFError):
