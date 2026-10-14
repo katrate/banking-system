@@ -37,7 +37,10 @@ def precheck_run(path):
     with open(path, "r") as f:
         sql_text = f.read()
     for stmt in sql_text.split(";"):
-        lines = [l for l in stmt.splitlines() if not l.strip().startswith("--")]
+        lines = []
+        for l in stmt.splitlines():
+            if not l.strip().startswith("--"):
+                lines.append(l)
         clean = "\n".join(lines).strip()
         if clean:
             cursor.execute(clean)
