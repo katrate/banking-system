@@ -11,6 +11,8 @@ if not bank.admin_login():
 customer_menu = [
     ("Add customer", bank.add_customer),
     ("Find customer by account number", bank.find_customer),
+    ("Modify customer details", bank.modify_customer),
+    ("Delete customer (full)", bank.delete_customer),
 ]
 account_menu = [
     ("New transaction (deposit / withdraw / transfer)", bank.transaction),

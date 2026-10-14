@@ -653,6 +653,104 @@ def view_loan():
             "   Next due: " + str(r["next_due_date"] or "-"),
     ])
     cursor.close()
+
+def modify_customer():
+    print("\n" + center("--- Modify Customer Details ---"))
+    ref = get_text("Customer ID or Account number: ")
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT customer_ID FROM customers WHERE customer_ID=%s", (ref,))
+    found = cursor.fetchone()
+    if found:
+        cust = ref
+    else:
+        cursor.execute("SELECT customer_ID FROM accounts WHERE account_number=%s", (ref,))
+        found = cursor.fetchone()
+        cust = found["customer_ID"] if found else None
+    if not cust:
+        say("No customer or account found for '" + ref + "'.")
+        cursor.close()
+        return
+    cursor.execute("SELECT name, email, phone, address FROM customers WHERE customer_ID=%s", (cust,))
+    cur = cursor.fetchone()
+    say("Current details for " + cust + ":")
+    say("  Name    : " + cur["name"])
+    say("  Email   : " + (cur["email"] or "-"))
+    say("  Phone   : " + (cur["phone"] or "-"))
+    say("  Address : " + (cur["address"] or "-"))
+    say("(leave a field blank to keep its current value)")
+    name = get_text("New name    [" + cur["name"] + "]: ", required=False)
+    email = get_text("New email   [" + (cur["email"] or "") + "]: ", required=False)
+    phone = get_text("New phone   [" + (cur["phone"] or "") + "]: ", required=False)
+    address = get_text("New address [" + (cur["address"] or "") + "]: ", required=False)
+    new_name = name if name else cur["name"]
+    new_email = email if email else (cur["email"] or None)
+    new_phone = phone if phone else (cur["phone"] or None)
+    new_address = address if address else (cur["address"] or None)
+    try:
+        cursor.execute(
+            "UPDATE customers SET name=%s, email=%s, phone=%s, address=%s "
+            "WHERE customer_ID=%s",
+            (new_name, new_email, new_phone, new_address, cust))
+        conn.commit()
+        say("Updated details for " + cust + ".")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        say("Update failed: " + str(e))
+    finally:
+        cursor.close()
+
+def delete_customer():
+    print("\n" + center("--- Delete Customer (Full) ---"))
+    cust = get_text("Customer ID to delete: ")
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT name FROM customers WHERE customer_ID=%s", (cust,))
+    crow = cursor.fetchone()
+    if not crow:
+        say("No customer found with ID " + cust + ".")
+        cursor.close()
+        return
+    cursor.execute(
+        "SELECT loan_ID, status, remaining FROM loans "
+        "WHERE customer_ID=%s AND status <> 'PAID'", (cust,))
+    unpaid = cursor.fetchall()
+    if unpaid:
+        say("Cannot delete " + cust + " - it has unpaid loan(s):")
+        for l in unpaid:
+            say("  " + l["loan_ID"] + "   status " + l["status"] +
+                "   remaining " + str(round(float(l["remaining"]), 2)))
+        cursor.close()
+        return
+    cursor.execute(
+        "SELECT account_number, balance FROM accounts WHERE customer_ID=%s", (cust,))
+    accts = cursor.fetchall()
+    say("Customer : " + cust + "  (" + crow["name"] + ")")
+    if accts:
+        for a in accts:
+            say("  Account " + a["account_number"] +
+                "   balance " + str(round(float(a["balance"]), 2)))
+    else:
+        say("  (no accounts)")
+    confirm = get_text("Permanently delete " + cust + "? (Y/N): ", required=False)
+    if not confirm or confirm.strip().upper() not in ("Y", "YES"):
+        say("Deletion cancelled.")
+        cursor.close()
+        return
+    try:
+        for a in accts:
+            cursor.execute("DELETE FROM transactions WHERE account_ID=%s",
+                           (a["account_number"],))
+        cursor.execute("DELETE FROM loans WHERE customer_ID=%s", (cust,))
+        for a in accts:
+            cursor.execute("DELETE FROM accounts WHERE account_number=%s",
+                           (a["account_number"],))
+        cursor.execute("DELETE FROM customers WHERE customer_ID=%s", (cust,))
+        conn.commit()
+        say("Deleted customer " + cust + " and all related data.")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        say("Delete failed: " + str(e))
+    finally:
+        cursor.close()
 #endregion
 
 #region Main Menu
