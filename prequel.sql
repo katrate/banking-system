@@ -56,6 +56,6 @@ CREATE TABLE IF NOT EXISTS loans (
 CREATE TABLE IF NOT EXISTS admins (
     admin_ID       VARCHAR(20) PRIMARY KEY,
     username       VARCHAR(50) UNIQUE NOT NULL,
-    password_hash  VARCHAR(255) NOT NULL,
+    password       VARCHAR(255) NOT NULL,
     full_name      VARCHAR(100)
 );

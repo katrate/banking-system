@@ -1,33 +1,23 @@
 import os
-import hashlib
 import calendar
-import getpass
 import time
 from datetime import date
 
 import mysql.connector
 
 #region Config
-def load_env(path=".env"):
-    if not os.path.exists(path):
-        return
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, val = line.split("=", 1)
-            os.environ[key.strip()] = val.strip()
-
-load_env()
+DB_HOST = "localhost"
+DB_PORT = 3306
+DB_USER = "katrate"
+DB_PASSWORD = "123"
 #endregion
 
 #region Connection
 conn = mysql.connector.connect(
-    host=os.getenv("DB_HOST", "localhost"),
-    port=int(os.getenv("DB_PORT", "3306")),
-    user=os.getenv("DB_USER", "katrate"),
-    password=os.getenv("DB_PASSWORD", "hello"),
+    host=DB_HOST,
+    port=DB_PORT,
+    user=DB_USER,
+    password=DB_PASSWORD,
 )
 #endregion
 
@@ -112,9 +102,6 @@ def get_amount(prompt):
             return round(val, 2)
         except ValueError:
             say("Please enter a valid number.")
-
-def hash_pw(pw):
-    return hashlib.sha256(pw.encode()).hexdigest()
 
 def calc_emi(principal, annual_rate, months):
     r = annual_rate / 12 / 100
@@ -245,9 +232,9 @@ def ensure_admin():
     c.execute("SELECT COUNT(*) FROM admins")
     if c.fetchone()[0] == 0:
         aid = next_id(c, "admins", "admin_ID", "ADM")
-        c.execute("INSERT INTO admins (admin_ID, username, password_hash, full_name) "
+        c.execute("INSERT INTO admins (admin_ID, username, password, full_name) "
                   "VALUES (%s,%s,%s,%s)",
-                  (aid, "admin", hash_pw("admin123"), "System Administrator"))
+                  (aid, "admin", "admin123", "System Administrator"))
         conn.commit()
         say("Default admin created  ->  username: admin   password: admin123")
     c.close()
@@ -258,13 +245,13 @@ def admin_login():
     print(center("===== ADMIN LOGIN ====="))
     for _ in range(3):
         user = get_text("Username: ")
-        pw = getpass.getpass(center_prompt("Password: ")).strip()
+        pw = get_text("Password: ")
         spinner("Verifying credentials", 2, 0.1)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT password_hash, full_name FROM admins WHERE username=%s", (user,))
+        cursor.execute("SELECT password, full_name FROM admins WHERE username=%s", (user,))
         row = cursor.fetchone()
         cursor.close()
-        if row and row["password_hash"] == hash_pw(pw):
+        if row and row["password"] == pw:
             type_print("Access granted. Welcome, " + (row["full_name"] or user) + "!", 0.03)
             time.sleep(0.6)
             clear()
@@ -284,21 +271,21 @@ def add_admin():
         c.close()
         return
     full_name = get_text("Full name (optional): ", required=False)
-    pw = getpass.getpass(center_prompt("Password for new admin: ")).strip()
+    pw = get_text("Password for new admin: ")
     if not pw:
         say("Password cannot be empty.")
         c.close()
         return
-    pw2 = getpass.getpass(center_prompt("Confirm password: ")).strip()
+    pw2 = get_text("Confirm password: ")
     if pw != pw2:
         say("Passwords do not match.")
         c.close()
         return
     aid = next_id(c, "admins", "admin_ID", "ADM")
     try:
-        c.execute("INSERT INTO admins (admin_ID, username, password_hash, full_name) "
+        c.execute("INSERT INTO admins (admin_ID, username, password, full_name) "
                   "VALUES (%s,%s,%s,%s)",
-                  (aid, username, hash_pw(pw), full_name))
+                  (aid, username, pw, full_name))
         conn.commit()
         say("Admin created : " + aid + "  (username: " + username + ")")
     except mysql.connector.Error as e:
