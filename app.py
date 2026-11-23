@@ -17,6 +17,7 @@ customer_menu = [
 account_menu = [
     ("New transaction (deposit / withdraw / transfer)", bank.transaction),
     ("View account / mini statement", bank.view_account),
+    ("Export transaction history to CSV", bank.export_transactions),
 ]
 loan_menu = [
     ("Apply for loan", bank.loan),

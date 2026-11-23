@@ -1,5 +1,6 @@
 import os
 import calendar
+import csv
 import time
 from datetime import date
 
@@ -616,6 +617,78 @@ def view_account():
                         str(round(float(r["balance_after"]), 2)))
         say_block(txns)
     cursor.close()
+
+def export_transactions():
+    print("\n" + center("--- Export Transaction History (CSV) ---"))
+    acct = get_text("Account number: ")
+    cursor = conn.cursor(dictionary=True)
+    info = _account_info(cursor, acct)
+    if not info:
+        say("Account not found."); cursor.close(); return
+    cursor.execute(
+        "SELECT transaction_ID, timestamp, type, amount, balance_after, "
+        "sender_ID, sender_Name, receiver_ID, receiver_Name "
+        "FROM transactions WHERE account_ID=%s ORDER BY timestamp ASC", (acct,))
+    rows = cursor.fetchall()
+    cursor.close()
+
+    if not rows:
+        say("No transactions found for " + acct + ".")
+        return
+
+    # ---- print the whole history on screen
+    say_block([
+        "  Account : " + acct,
+        "  Holder  : " + info["name"],
+        "  Type    : " + info["account_type"] + "   Status: " + info["status"],
+        "  Balance : " + str(round(float(info["balance"]), 2)),
+        "  Records : " + str(len(rows)),
+    ])
+    print()
+    table = ["    " + "DATE & TIME".ljust(19) + "  " + "TYPE".ljust(14) +
+             "  " + "AMOUNT".rjust(10) + "  " + "BALANCE AFTER".rjust(13) +
+             "  " + "PARTY",
+             "  " + "-" * 78]
+    for r in rows:
+        if r["type"] == "TRANSFER_OUT":
+            party = "To " + str(r["receiver_Name"] or r["receiver_ID"] or "-")
+        elif r["type"] == "TRANSFER_IN":
+            party = "From " + str(r["sender_Name"] or r["sender_ID"] or "-")
+        else:
+            party = "-"
+        table.append("    " + str(r["timestamp"])[:19].ljust(19) + "  " +
+                     str(r["type"]).ljust(14) + "  " +
+                     str(round(float(r["amount"]), 2)).rjust(10) + "  " +
+                     str(round(float(r["balance_after"]), 2)).rjust(13) + "  " +
+                     party)
+    say_block(table)
+
+    # ---- write the CSV, exactly like the _details.txt report
+    filename = acct + "_transactions.csv"
+    try:
+        with open(filename, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["Transaction History"])
+            w.writerow(["Account", acct])
+            w.writerow(["Holder", info["name"]])
+            w.writerow(["Generated", str(date.today())])
+            w.writerow([])
+            w.writerow(["Transaction ID", "Date & Time", "Type", "Amount",
+                        "Balance After", "Sender ID", "Sender Name",
+                        "Receiver ID", "Receiver Name"])
+            for r in rows:
+                w.writerow([
+                    str(r["transaction_ID"]), str(r["timestamp"]), str(r["type"]),
+                    str(round(float(r["amount"]), 2)),
+                    str(round(float(r["balance_after"]), 2)),
+                    str(r["sender_ID"] or ""), str(r["sender_Name"] or ""),
+                    str(r["receiver_ID"] or ""), str(r["receiver_Name"] or ""),
+                ])
+    except OSError as e:
+        say("Could not write the CSV file: " + str(e))
+        return
+    say("Saved to " + filename + "   (" + str(len(rows)) +
+        (" record)" if len(rows) == 1 else " records)"))
 
 def view_loan():
     print("\n" + center("--- Loan Status ---"))

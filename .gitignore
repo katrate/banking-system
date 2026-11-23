@@ -8,6 +8,7 @@ __pycache__/
 
 # Generated customer reports
 *_details.txt
+*_transactions.csv
 
 # VS Code local history
 .history/
